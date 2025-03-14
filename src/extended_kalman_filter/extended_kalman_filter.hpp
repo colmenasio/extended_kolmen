@@ -128,7 +128,7 @@ public:
                                                                                _process_covariances(EMatrix<double, x_size, x_size>::Identity()),
                                                                                _measure_covariances(EMatrix<double, z_size, z_size>::Identity())
     {
-        this->_specific_differencials.setConstant(DEFAULT_DIFERENTIAL)
+        this->_specific_differencials.setConstant(DEFAULT_DIFERENTIAL);
     }
 
     ~ExtendedKalmanFilter() = default;
