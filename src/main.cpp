@@ -1,13 +1,15 @@
 #include "extended_kalman_filter/extended_kalman_filter.hpp"
 
-class TestModel: public StatePredictor<3, 1>{
+#include <iostream>
+
+class TestModel: public StatePredictor<3, 2>{
     public:
     virtual EMatrix<double, 3, 1> predict_state(
         const EMatrix<double, 3, 1> &previous_state,
-        const EMatrix<double, 1, 1> &control) override {
+        const EMatrix<double, 2, 1> &control) override {
             // I KNOW THIS IS A SHIT MODEL LEMME COOOOK
             EMatrix<double, 3, 1> new_state;
-            new_state[2] = previous_state[2]; // Accel
+            new_state[2] = previous_state[2] + control[1]; // Accel (control 1 sets acceleration)
             new_state[1] = previous_state[1] + previous_state[2] * control[0]; // Speed 
             new_state[0] = previous_state[0] + previous_state[1] * control[0]; // Pos
             return new_state;
@@ -18,16 +20,28 @@ class TestMeasurer: public MeasurePredictor<3, 1>{
     public:
     virtual EMatrix<double, 1, 1> predict_measure(
         const EMatrix<double, 3, 1> &state) override{
-            return EMatrix<double, 1, 1>(state[0]);
+            EMatrix<double, 1, 1> measure;
+            measure[0] = 2*state[0]; // We observe twice a value proportional to the position
+            return measure;
         };
 };
 
 int main(int argc, char const *argv[])
 {
 
-    auto EKF = ExtendedKalmanFilter<3, 1, 1>(
+    auto EKF = ExtendedKalmanFilter<3, 2, 1>(
         std::make_shared<TestModel>(),
         std::make_shared<TestMeasurer>()
-    ); 
+    );
+    EMatrix<double, 2, 1> control_1_test;
+    control_1_test[0] = 1; // 1 second of dt
+    control_1_test[1] = 1; // 1 unit of acceleration
+    std::cout << EKF.predict_state(control_1_test) << std::endl << std::endl;
+    std::cout << EKF.predict_measures() << std::endl << std::endl;
+    
+    EKF.update(control_1_test, Eigen::Matrix<double, 1, 1>::Ones());
+
+    std::cout << EKF.predict_state(control_1_test) << std::endl << std::endl;
+    std::cout << EKF.predict_measures() << std::endl;
     return 0;
 }

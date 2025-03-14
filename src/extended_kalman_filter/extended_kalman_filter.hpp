@@ -52,15 +52,50 @@ private:
     EMatrix<double, x_size, x_size> _process_covariances;
     EMatrix<double, z_size, z_size> _measure_covariances;
 
-    // Calculate the jacobian of f
+    // Calculate the jacobian of f using symmetric difference 
     EMatrix<double, x_size, x_size> get_F(const Eigen::Matrix<double, u_size, 1> &control)
     {
-        return EMatrix<double, x_size, x_size>();
+        EMatrix<double, x_size, x_size> J;
+        for (int j = 0; j < x_size; ++j) {
+            // Perturb the j-th component by h
+            EMatrix<double, x_size, 1> x_plus = this->_state;
+            EMatrix<double, x_size, 1> x_minus = this->_state;
+            
+            x_plus(j) += this->default_differential;
+            x_minus(j) -= this->default_differential;
+            
+            // Evaluate the function at x + h and x - h
+            EMatrix<double, x_size, 1> f_plus = this->_state_predictor->predict_state(x_plus, control);
+            EMatrix<double, x_size, 1> f_minus = this->_state_predictor->predict_state(x_minus, control);
+            
+            // Calculate the partial derivatives for all rows i in the Jacobian
+            J.col(j) = (f_plus - f_minus) / (2 * this->default_differential);
+        }
+    
+        return J;
+    
     };
 
-    // Calculate the jacobian of g
+    // Calculate the jacobian of g using symmetric difference
     EMatrix<double, z_size, x_size> get_H() {
-        return EMatrix<double, z_size, x_size>();
+        EMatrix<double, z_size, x_size> J;
+        for (int j = 0; j < x_size; ++j) {
+            // Perturb the j-th component by h
+            EMatrix<double, x_size, 1> x_plus = this->_state;
+            EMatrix<double, x_size, 1> x_minus = this->_state;
+            
+            x_plus(j) += this->default_differential;
+            x_minus(j) -= this->default_differential;
+            
+            // Evaluate the function at x + h and x - h
+            EMatrix<double, z_size, 1> f_plus = this->_measure_predictor->predict_measure(x_plus);
+            EMatrix<double, z_size, 1> f_minus = this->_measure_predictor->predict_measure(x_minus);
+            
+            // Calculate the partial derivatives for all rows i in the Jacobian
+            J.col(j) = (f_plus - f_minus) / (2 * this->default_differential);
+        }
+    
+        return J;
     };
 
 public:
@@ -70,7 +105,7 @@ public:
         std::shared_ptr<MeasurePredictor<x_size, z_size>> measure_predictor) : _state_predictor(state_predictor),
                                                                                _measure_predictor(measure_predictor),
                                                                                _state_covariances(EMatrix<double, x_size, x_size>::Identity()),
-                                                                               _state(EMatrix<double, x_size, 1>(0)),
+                                                                               _state(EMatrix<double, x_size, 1>::Zero()),
                                                                                _process_covariances(EMatrix<double, x_size, x_size>::Identity()),
                                                                                _measure_covariances(EMatrix<double, z_size, z_size>::Identity()) {}
     ~ExtendedKalmanFilter() = default;
@@ -88,7 +123,7 @@ public:
     {
         // Bindings
         EMatrix<double, x_size, x_size> F = this->get_F(control);
-        EMatrix<double, z_size, x_size> H = this->get_H(control);
+        EMatrix<double, z_size, x_size> H = this->get_H();
 
         // Prediction
         EMatrix<double, x_size, 1> predicted_x = this->predict_state(control);
