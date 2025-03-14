@@ -7,6 +7,10 @@
 
 #define EMatrix Eigen::Matrix
 
+// State Prediction Function Abstract class
+//
+// Concrete models should inherit from this class
+// Corresponds to the "f" function of the kalman filter, predicting the next state in function of the previous state and current control
 template <int x_size, int u_size>
 class StatePredictor
 {
@@ -16,6 +20,10 @@ public:
         const EMatrix<double, u_size, 1> &control) = 0;
 };
 
+// Measure Prediction Function Abstract class
+//
+// Concrete models should inherit from this class
+// Corresponds to the "h" function of the kalman filter, predicting the measure in function of the current state
 template <int x_size, int z_size>
 class MeasurePredictor
 {
@@ -41,9 +49,11 @@ template <int x_size, int u_size, int z_size>
 class ExtendedKalmanFilter
 {
 private:
+    // State and others
     EMatrix<double, x_size, 1> _state;
     EMatrix<double, x_size, x_size> _state_covariances;
 
+    // Predictors (state and measure models)
     std::shared_ptr<StatePredictor<x_size, u_size>> _state_predictor;
     std::shared_ptr<MeasurePredictor<x_size, z_size>> _measure_predictor;
 
@@ -52,54 +62,61 @@ private:
     EMatrix<double, x_size, x_size> _process_covariances;
     EMatrix<double, z_size, z_size> _measure_covariances;
 
-    // Calculate the jacobian of f using symmetric difference 
+    // Calculate the jacobian of f using symmetric difference
     EMatrix<double, x_size, x_size> get_F(const Eigen::Matrix<double, u_size, 1> &control)
     {
         EMatrix<double, x_size, x_size> J;
-        for (int j = 0; j < x_size; ++j) {
+        // Differenciate over each variable of "state" while "control" is constanst
+        // We use symmetric derivatves
+        for (int j = 0; j < x_size; ++j)
+        {
             // Perturb the j-th component by h
             EMatrix<double, x_size, 1> x_plus = this->_state;
             EMatrix<double, x_size, 1> x_minus = this->_state;
-            
+
             x_plus(j) += this->default_differential;
             x_minus(j) -= this->default_differential;
-            
+
             // Evaluate the function at x + h and x - h
             EMatrix<double, x_size, 1> f_plus = this->_state_predictor->predict_state(x_plus, control);
             EMatrix<double, x_size, 1> f_minus = this->_state_predictor->predict_state(x_minus, control);
-            
+
             // Calculate the partial derivatives for all rows i in the Jacobian
             J.col(j) = (f_plus - f_minus) / (2 * this->default_differential);
         }
-    
         return J;
-    
     };
 
     // Calculate the jacobian of g using symmetric difference
-    EMatrix<double, z_size, x_size> get_H() {
+    EMatrix<double, z_size, x_size> get_H()
+    {
         EMatrix<double, z_size, x_size> J;
-        for (int j = 0; j < x_size; ++j) {
+        for (int j = 0; j < x_size; ++j)
+        {
             // Perturb the j-th component by h
             EMatrix<double, x_size, 1> x_plus = this->_state;
             EMatrix<double, x_size, 1> x_minus = this->_state;
-            
+
             x_plus(j) += this->default_differential;
             x_minus(j) -= this->default_differential;
-            
+
             // Evaluate the function at x + h and x - h
             EMatrix<double, z_size, 1> f_plus = this->_measure_predictor->predict_measure(x_plus);
             EMatrix<double, z_size, 1> f_minus = this->_measure_predictor->predict_measure(x_minus);
-            
+
             // Calculate the partial derivatives for all rows i in the Jacobian
             J.col(j) = (f_plus - f_minus) / (2 * this->default_differential);
         }
-    
+
         return J;
     };
 
 public:
+    // Default constructor disabled. Provide a state_predictor and a measure_predictor of appropiate size instead.
     ExtendedKalmanFilter() = delete;
+
+    // Intended constuctor
+    // Provide instance of clases implementing the StatePredictor and MeasurePredictor appropiately
     ExtendedKalmanFilter(
         std::shared_ptr<StatePredictor<x_size, u_size>> state_predictor,
         std::shared_ptr<MeasurePredictor<x_size, z_size>> measure_predictor) : _state_predictor(state_predictor),
@@ -107,18 +124,25 @@ public:
                                                                                _state_covariances(EMatrix<double, x_size, x_size>::Identity()),
                                                                                _state(EMatrix<double, x_size, 1>::Zero()),
                                                                                _process_covariances(EMatrix<double, x_size, x_size>::Identity()),
-                                                                               _measure_covariances(EMatrix<double, z_size, z_size>::Identity()) {}
+                                                                               _measure_covariances(EMatrix<double, z_size, z_size>::Identity())
+    {
+    }
+
     ~ExtendedKalmanFilter() = default;
 
+    // Predict the state according to the old state and some control input
     EMatrix<double, x_size, 1> predict_state(const Eigen::Matrix<double, u_size, 1> control)
     {
         return this->_state_predictor->predict_state(this->_state, control);
     }
+
+    // Predict the measures according to the old state
     EMatrix<double, z_size, 1> predict_measures()
     {
         return this->_measure_predictor->predict_measure(this->_state);
     };
 
+    // Update the state of the kalman filter with new measures
     void update(const EMatrix<double, u_size, 1> &control, const Eigen::Matrix<double, z_size, 1> &measure)
     {
         // Bindings
@@ -130,11 +154,11 @@ public:
         EMatrix<double, x_size, x_size> predicted_covariance = (F) * (this->_state_covariances) * (F.transpose()) + this->_process_covariances;
 
         // Update
-        EMatrix<double, z_size, 1> measure_residual = measure - this->predict_measures();
+        EMatrix<double, z_size, 1> measure_residual = measure - this->predict_measures(); // TODO fix this bug, this predicts over old state not predicted state
         EMatrix<double, z_size, z_size> covariance_residual = (H) * (predicted_covariance) * (H.transpose()) + this->_measure_covariances;
         EMatrix<double, x_size, z_size> K_gain = (predicted_covariance) * (H.transpose()) * (covariance_residual.inverse());
         this->_state = predicted_x + (K_gain) * (measure_residual);
-        this->_state_covariances = (EMatrix<double, x_size, x_size>::Identity() - K_gain * H)*(predicted_covariance);
+        this->_state_covariances = (EMatrix<double, x_size, x_size>::Identity() - K_gain * H) * (predicted_covariance);
     };
 };
 

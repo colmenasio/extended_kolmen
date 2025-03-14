@@ -2,6 +2,9 @@
 
 #include <iostream>
 
+// Test state model of a 1d particle 
+// State is [pos, vel, acc]
+// Control is [dt, new_acc]
 class TestModel: public StatePredictor<3, 2>{
     public:
     virtual EMatrix<double, 3, 1> predict_state(
@@ -16,6 +19,8 @@ class TestModel: public StatePredictor<3, 2>{
         };
 };
 
+// Test measure model.
+// We expect to observe [2*pos], where pos is the position of a 1d particle
 class TestMeasurer: public MeasurePredictor<3, 1>{
     public:
     virtual EMatrix<double, 1, 1> predict_measure(
