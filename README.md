@@ -1,5 +1,5 @@
-# IN DEVELOPEMENT
+# Kolmen
 
-Generic Template-Based portable EKF implementation
+Extremely lightweight Template-Based portable EKF implementation
 
-Just a small personal proyect as a side quest, both for consolidating my knowledge on templates and to learn kalman filters for Tecnun Eracing (mirena proyect)
+Just a really small personal proyect as a side quest, both for consolidating my knowledge on templates and to learn kalman filters for Tecnun Eracing (mirena proyect)
