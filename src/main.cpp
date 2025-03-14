@@ -26,7 +26,7 @@ class TestMeasurer: public MeasurePredictor<3, 1>{
     virtual EMatrix<double, 1, 1> predict_measure(
         const EMatrix<double, 3, 1> &state) override{
             EMatrix<double, 1, 1> measure;
-            measure[0] = 2*state[0]; // We observe twice a value proportional to the position
+            measure[0] = 2*state[0]; // We observe a value proportional to the position
             return measure;
         };
 };
@@ -42,11 +42,11 @@ int main(int argc, char const *argv[])
     control_1_test[0] = 1; // 1 second of dt
     control_1_test[1] = 1; // 1 unit of acceleration
     std::cout << EKF.predict_state(control_1_test) << std::endl << std::endl;
-    std::cout << EKF.predict_measures() << std::endl << std::endl;
+    std::cout << EKF.predict_measures(control_1_test) << std::endl << std::endl;
     
     EKF.update(control_1_test, Eigen::Matrix<double, 1, 1>::Ones());
 
     std::cout << EKF.predict_state(control_1_test) << std::endl << std::endl;
-    std::cout << EKF.predict_measures() << std::endl;
+    std::cout << EKF.predict_measures(control_1_test) << std::endl;
     return 0;
 }
