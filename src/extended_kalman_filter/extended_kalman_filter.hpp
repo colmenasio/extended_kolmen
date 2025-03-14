@@ -84,7 +84,7 @@ private:
             EMatrix<double, x_size, 1> f_minus = this->_state_predictor->predict_state(x_minus, control);
 
             // Calculate the partial derivatives for all rows i in the Jacobian
-            J.col(j) = (f_plus - f_minus) / (2 * this->default_differential);
+            J.col(j) = (f_plus - f_minus) / (2 * this->_specific_differencials(j));
         }
         return J;
     };
@@ -99,15 +99,15 @@ private:
             EMatrix<double, x_size, 1> x_plus = predicted_state;
             EMatrix<double, x_size, 1> x_minus = predicted_state;
 
-            x_plus(j) += this->default_differential;
-            x_minus(j) -= this->default_differential;
+            x_plus(j) += this->_specific_differencials(j);
+            x_minus(j) -= this->_specific_differencials(j);
 
             // Evaluate the function at x + h and x - h
             EMatrix<double, z_size, 1> f_plus = this->_measure_predictor->predict_measure(x_plus);
             EMatrix<double, z_size, 1> f_minus = this->_measure_predictor->predict_measure(x_minus);
 
             // Calculate the partial derivatives for all rows i in the Jacobian
-            J.col(j) = (f_plus - f_minus) / (2 * this->default_differential);
+            J.col(j) = (f_plus - f_minus) / (2 * this->_specific_differencials(j));
         }
 
         return J;
