@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+// EXAMPLE OF THE USE OF THE KALMAN FILTER USING A 1-d PARTICLE MODEL
+
 // Test state model of a 1d particle 
 // State is [pos, vel, acc]
 // Control is [dt, new_acc]
@@ -11,10 +13,17 @@ class TestModel: public StatePredictor<3, 2>{
         const EMatrix<double, 3, 1> &previous_state,
         const EMatrix<double, 2, 1> &control) override {
             // I KNOW THIS IS A SHIT MODEL LEMME COOOOK
-            EMatrix<double, 3, 1> new_state;
-            new_state[2] = previous_state[2] + control[1]; // Accel (control 1 sets acceleration)
-            new_state[1] = previous_state[1] + previous_state[2] * control[0]; // Speed 
-            new_state[0] = previous_state[0] + previous_state[1] * control[0]; // Pos
+            EMatrix<double, 3, 1> new_state ;
+
+            // Acceleration
+            new_state[2] = control[1];
+
+            // Speed
+            new_state[1] = previous_state[1] + (previous_state[2] + new_state[2])/2 * control[0];
+
+            // Pos
+            new_state[0] = previous_state[0] + (previous_state[1] + new_state[1])/2 * control[0];
+
             return new_state;
         };
 };
@@ -33,14 +42,18 @@ class TestMeasurer: public MeasurePredictor<3, 1>{
 
 int main(int argc, char const *argv[])
 {
-
+    // Instanciate the filter
     auto EKF = ExtendedKalmanFilter<3, 2, 1>(
         std::make_shared<TestModel>(),
         std::make_shared<TestMeasurer>()
     );
+
+    // Make a dummy control vector vector
     EMatrix<double, 2, 1> control_1_test;
     control_1_test[0] = 1; // 1 second of dt
     control_1_test[1] = 1; // 1 unit of acceleration
+
+    // Predictions before and after the state update
     std::cout << EKF.predict_state(control_1_test) << std::endl << std::endl;
     std::cout << EKF.predict_measures(control_1_test) << std::endl << std::endl;
     
