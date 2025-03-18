@@ -1,4 +1,5 @@
 #include "extended_kalman_filter/extended_kalman_filter.hpp"
+#include "extended_kalman_filter/defaults.hpp"
 
 #include <iostream>
 
@@ -7,7 +8,7 @@
 // Test state model of a 1d particle 
 // State is [pos, vel, acc]
 // Control is [dt, new_acc]
-class TestModel: public StatePredictor<3, 2>{
+class TestModel: public Def::SDStatePredictor<3, 2>{
     public:
     virtual EMatrix<double, 3, 1> predict_state(
         const EMatrix<double, 3, 1> &previous_state,
@@ -30,7 +31,7 @@ class TestModel: public StatePredictor<3, 2>{
 
 // Test measure model.
 // We expect to observe [2*pos], where pos is the position of a 1d particle
-class TestMeasurer: public MeasurePredictor<3, 1>{
+class TestMeasurer: public Def::SDMeasurePredictor<3, 1>{
     public:
     virtual EMatrix<double, 1, 1> predict_measure(
         const EMatrix<double, 3, 1> &state) override{

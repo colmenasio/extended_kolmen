@@ -7,8 +7,6 @@
 
 #define EMatrix Eigen::Matrix
 
-#define DEFAULT_DIFERENTIAL 0.001
-
 // State Prediction Function Abstract class
 //
 // Concrete models should inherit from this class
@@ -17,8 +15,14 @@ template <int x_size, int u_size>
 class StatePredictor
 {
 public:
+    // Predict next state based on current state + control input. Corresponds the "f" in theory
     virtual EMatrix<double, x_size, 1> predict_state(
         const EMatrix<double, x_size, 1> &previous_state,
+        const EMatrix<double, u_size, 1> &control) = 0;
+
+    // Get jacobian evaluated at the given state assuming the control vector is constant. Corresponds to "F" in theory
+    virtual EMatrix<double, x_size, x_size> get_jacobian(
+        const EMatrix<double, x_size, 1> &state,
         const EMatrix<double, u_size, 1> &control) = 0;
 };
 
@@ -30,7 +34,12 @@ template <int x_size, int z_size>
 class MeasurePredictor
 {
 public:
+    // Predict next measure based on current state. Corresponds to "h" in theory
     virtual EMatrix<double, z_size, 1> predict_measure(
+        const EMatrix<double, x_size, 1> &state) = 0;
+    
+    // Get jacobian evaluated at the given state. Corresponds to "H" in theory
+    virtual EMatrix<double, z_size, x_size> get_jacobian(
         const EMatrix<double, x_size, 1> &state) = 0;
 };
 
@@ -60,58 +69,8 @@ private:
     std::shared_ptr<MeasurePredictor<x_size, z_size>> _measure_predictor;
  
     // Config values
-    EMatrix<double, x_size, 1> _specific_differencials;
     EMatrix<double, x_size, x_size> _process_covariances;
     EMatrix<double, z_size, z_size> _measure_covariances;
-
-    // Calculate the jacobian of f using symmetric difference
-    EMatrix<double, x_size, x_size> get_F(const Eigen::Matrix<double, u_size, 1> &control)
-    {
-        EMatrix<double, x_size, x_size> J;
-        // Differenciate over each variable of "state" while "control" is constanst
-        // We use symmetric derivatves
-        for (int j = 0; j < x_size; ++j)
-        {
-            // Perturb the j-th component by h
-            EMatrix<double, x_size, 1> x_plus = this->_state;
-            EMatrix<double, x_size, 1> x_minus = this->_state;
-
-            x_plus(j) += this->_specific_differencials(j);
-            x_minus(j) -= this->_specific_differencials(j);
-
-            // Evaluate the function at x + h and x - h
-            EMatrix<double, x_size, 1> f_plus = this->_state_predictor->predict_state(x_plus, control);
-            EMatrix<double, x_size, 1> f_minus = this->_state_predictor->predict_state(x_minus, control);
-
-            // Calculate the partial derivatives for all rows i in the Jacobian
-            J.col(j) = (f_plus - f_minus) / (2 * this->_specific_differencials(j));
-        }
-        return J;
-    };
-
-    // Calculate the jacobian of g using symmetric difference
-    EMatrix<double, z_size, x_size> get_H(const Eigen::Matrix<double, x_size, 1> &predicted_state)
-    {
-        EMatrix<double, z_size, x_size> J;
-        for (int j = 0; j < x_size; ++j)
-        {
-            // Perturb the j-th component by h
-            EMatrix<double, x_size, 1> x_plus = predicted_state;
-            EMatrix<double, x_size, 1> x_minus = predicted_state;
-
-            x_plus(j) += this->_specific_differencials(j);
-            x_minus(j) -= this->_specific_differencials(j);
-
-            // Evaluate the function at x + h and x - h
-            EMatrix<double, z_size, 1> f_plus = this->_measure_predictor->predict_measure(x_plus);
-            EMatrix<double, z_size, 1> f_minus = this->_measure_predictor->predict_measure(x_minus);
-
-            // Calculate the partial derivatives for all rows i in the Jacobian
-            J.col(j) = (f_plus - f_minus) / (2 * this->_specific_differencials(j));
-        }
-
-        return J;
-    };
 
 public:
     // Default constructor disabled. Provide a state_predictor and a measure_predictor of appropiate size instead.
@@ -127,9 +86,7 @@ public:
                                                                                _state(EMatrix<double, x_size, 1>::Zero()),
                                                                                _process_covariances(EMatrix<double, x_size, x_size>::Identity()),
                                                                                _measure_covariances(EMatrix<double, z_size, z_size>::Identity())
-    {
-        this->_specific_differencials.setConstant(DEFAULT_DIFERENTIAL);
-    }
+    {}
 
     ~ExtendedKalmanFilter() = default;
 
@@ -137,10 +94,10 @@ public:
     void update(const EMatrix<double, u_size, 1> &control, const Eigen::Matrix<double, z_size, 1> &measure)
     {
         // Bindings (predictions and jacobians)
-        EMatrix<double, x_size, 1> predicted_state = this->predict_state(control);
+        EMatrix<double, x_size, 1> predicted_state = this->_state_predictor->predict_state(this->_state, control);
         EMatrix<double, z_size, 1> predicted_measure = this->_measure_predictor->predict_measure(predicted_state);
-        EMatrix<double, x_size, x_size> F = this->get_F(control);
-        EMatrix<double, z_size, x_size> H = this->get_H(predicted_state);
+        EMatrix<double, x_size, x_size> F = this->_state_predictor->get_jacobian(predicted_state, control);
+        EMatrix<double, z_size, x_size> H = this->_measure_predictor->get_jacobian(predicted_state);
 
         // Prediction
         EMatrix<double, x_size, x_size> predicted_covariance = (F) * (this->_state_covariances) * (F.transpose()) + this->_process_covariances;
@@ -168,13 +125,6 @@ public:
     {
         return this->_measure_predictor->predict_measure(this->predict_state(control));
     };
-
-    // Set specific pertubation (h) values for each element of the state when applying symmetric differenciation
-    // Each element in the passed vector will be the perturbation applied when differenciating respect the correspondent element of the state vector
-    // Defaults to 0.001 
-    void set_specific_differencials(const EMatrix<double, x_size, 1>& differentials){
-        this->_specific_differencials = differentials;
-    }
 
     // Set the covariance matrix of the state prediction noise (Q)
     void set_process_covariance(EMatrix<double, x_size, x_size>& process_covariances){
