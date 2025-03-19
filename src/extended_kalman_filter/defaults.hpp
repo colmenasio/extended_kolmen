@@ -1,6 +1,8 @@
+#ifndef ekf_defaults_hpp
+#define ekf_defaults_hpp
 #include "extended_kalman_filter.hpp"
 
-namespace Def
+namespace mirena::Def
 {
 
     // Symmetric differenciation state predictor
@@ -110,3 +112,5 @@ namespace Def
         }
     };
 }
+
+#endif
